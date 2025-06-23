@@ -72,9 +72,6 @@ dns_infomaniak_add() {
     return 1
   fi
 
-  # extract first part of domain
-  #key=${fulldomain%."$zone"}
-
   _debug "zone:$zone"
 
   # payload
@@ -141,9 +138,6 @@ dns_infomaniak_rm() {
     return 1
   fi
 
-  # extract first part of domain
-  key=${fulldomain%."$zone"}
-
   _debug "zone:$zone"
 
   # find previous record
@@ -171,7 +165,7 @@ dns_infomaniak_rm() {
 
 _get_zone() {
   domain="$1"
-
+  # Whatever the domain is, you can get the fqdn with the following.
   # shellcheck disable=SC1004
   response=$(_get "${INFOMANIAK_API_URL}/2/domains/${domain}/zones" | sed 's/.*\[{"fqdn"\:"\(.*\)/\1/')
   echo "${response%%\"*}"
