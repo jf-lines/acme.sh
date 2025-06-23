@@ -65,27 +65,23 @@ dns_infomaniak_add() {
   _debug fulldomain "$fulldomain"
   _debug txtvalue "$txtvalue"
 
-  fqdn=${fulldomain#_acme-challenge.}
-
   # guess which base domain to add record to
-  zone_and_id=$(_find_zone "$fqdn")
-  if [ -z "$zone_and_id" ]; then
-    _err "cannot find zone to modify"
+  zone=$(_get_zone "$fulldomain")
+  if [ -z "$zone" ]; then
+    _err "cannot find zone:<${zone}> to modify"
     return 1
   fi
-  zone=${zone_and_id% *}
-  domain_id=${zone_and_id#* }
 
   # extract first part of domain
-  key=${fulldomain%."$zone"}
+  #key=${fulldomain%."$zone"}
 
-  _debug "zone:$zone id:$domain_id key:$key"
+  _debug "zone:$zone"
 
   # payload
-  data="{\"type\": \"TXT\", \"source\": \"$key\", \"target\": \"$txtvalue\", \"ttl\": $INFOMANIAK_TTL}"
+  data="{\"type\": \"TXT\", \"source\": \"$zone\", \"target\": \"$txtvalue\", \"ttl\": $INFOMANIAK_TTL}"
 
   # API call
-  response=$(_post "$data" "${INFOMANIAK_API_URL}/1/domain/$domain_id/dns/record")
+  response=$(_post "$data" "${INFOMANIAK_API_URL}/2/zones/${zone}/records")
   if [ -n "$response" ] && echo "$response" | _contains '"result":"success"'; then
     _info "Record added"
     _debug "Response: $response"
@@ -138,26 +134,23 @@ dns_infomaniak_rm() {
   _debug fulldomain "$fulldomain"
   _debug txtvalue "$txtvalue"
 
-  fqdn=${fulldomain#_acme-challenge.}
-
   # guess which base domain to add record to
-  zone_and_id=$(_find_zone "$fqdn")
-  if [ -z "$zone_and_id" ]; then
-    _err "cannot find zone to modify"
+  zone=$(_get_zone "$fulldomain")
+  if [ -z "$zone" ]; then
+    _err "cannot find zone:<$zone> to modify"
     return 1
   fi
-  zone=${zone_and_id% *}
-  domain_id=${zone_and_id#* }
 
   # extract first part of domain
   key=${fulldomain%."$zone"}
 
-  _debug "zone:$zone id:$domain_id key:$key"
+  _debug "zone:$zone"
 
   # find previous record
-  # shellcheck disable=SC1004
-  record_id=$(_get "${INFOMANIAK_API_URL}/1/domain/$domain_id/dns/record" | sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}\
-{/g' | sed -n 's/.*"id":"*\([0-9]*\)"*.*"source_idn":"'"$fulldomain"'".*"target_idn":"'"$txtvalue"'".*/\1/p')
+  # shellcheck disable=SC2086
+  record_id=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" |\
+        sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g' |\
+       	sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'$zone'".*"target":"\\"'$txtvalue'\\"".*/\1/p')
   if [ -z "$record_id" ]; then
     _err "could not find record to delete"
     return 1
@@ -165,7 +158,7 @@ dns_infomaniak_rm() {
   _debug "record_id: $record_id"
 
   # API call
-  response=$(_post "" "${INFOMANIAK_API_URL}/1/domain/$domain_id/dns/record/$record_id" "" DELETE)
+  response=$(_post "" "${INFOMANIAK_API_URL}/2/zones/${zone}/records/${record_id}" "" DELETE)
   if [ -n "$response" ] && echo "$response" | _contains '"result":"success"'; then
     _info "Record deleted"
     return 0
@@ -176,25 +169,10 @@ dns_infomaniak_rm() {
 
 ####################  Private functions below ##################################
 
-_get_domain_id() {
+_get_zone() {
   domain="$1"
 
   # shellcheck disable=SC1004
-  _get "${INFOMANIAK_API_URL}/1/product?service_name=domain&customer_name=$domain" | sed 's/.*"data":\[{\(.*\)}\]}/\1/; s/,/\
-/g' | sed -n 's/^"id":\(.*\)/\1/p'
-}
-
-_find_zone() {
-  zone="$1"
-
-  # find domain in list, removing . parts sequentialy
-  while _contains "$zone" '\.'; do
-    _debug "testing $zone"
-    id=$(_get_domain_id "$zone")
-    if [ -n "$id" ]; then
-      echo "$zone $id"
-      return
-    fi
-    zone=${zone#*.}
-  done
+  response=$(_get "${INFOMANIAK_API_URL}/2/domains/${domain}/zones" | sed 's/.*\[{"fqdn"\:"\(.*\)/\1/')
+  echo "${response%%\"*}"
 }
