@@ -6,6 +6,7 @@ Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_infomaniak
 Options:
  INFOMANIAK_API_TOKEN API Token
 Issues: github.com/acmesh-official/acme.sh/issues/3188
+
 '
 
 # To use this API you need visit the API dashboard of your account
