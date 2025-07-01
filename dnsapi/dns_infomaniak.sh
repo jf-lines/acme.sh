@@ -73,10 +73,13 @@ dns_infomaniak_add() {
     return 1
   fi
 
-  _debug "zone:$zone"
+  # extract first part of domain
+  key=${fulldomain%."$zone"}
+
+  _debug "zone:$zone key:$key"
 
   # payload
-  data="{\"type\": \"TXT\", \"source\": \"$zone\", \"target\": \"$txtvalue\", \"ttl\": $INFOMANIAK_TTL}"
+  data="{\"type\": \"TXT\", \"source\": \"$key\", \"target\": $txtvalue, \"ttl\": $INFOMANIAK_TTL}"
 
   # API call
   response=$(_post "$data" "${INFOMANIAK_API_URL}/2/zones/${zone}/records")
@@ -139,13 +142,16 @@ dns_infomaniak_rm() {
     return 1
   fi
 
-  _debug "zone:$zone"
+  # extract first part of domain
+  key=${fulldomain%."$zone"}
+
+  _debug "zone:$zone key:$key"
 
   # find previous record
   # shellcheck disable=SC2086
   record_id=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" |
     sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g' |
-    sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'$zone'".*"target":"\\"'$txtvalue'\\"".*/\1/p')
+    sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'$key'".*"target":"\\"'$txtvalue'\\"".*/\1/p')
   if [ -z "$record_id" ]; then
     _err "could not find record to delete"
     return 1
@@ -157,9 +163,10 @@ dns_infomaniak_rm() {
   if [ -n "$response" ] && echo "$response" | _contains '"result":"success"'; then
     _info "Record deleted"
     return 0
+  else
+    _err "could not delete record"
+    return 1
   fi
-  _err "could not delete record"
-  return 1
 }
 
 ####################  Private functions below ##################################
