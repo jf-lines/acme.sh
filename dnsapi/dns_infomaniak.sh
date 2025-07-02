@@ -83,10 +83,12 @@ dns_infomaniak_add() {
 
   # API call
   response=$(_post "$data" "${INFOMANIAK_API_URL}/2/zones/${zone}/records")
-  if [ -n "$response" ] && [ "$(echo "$response" | _contains '"result":"success"')" ]; then
-    _info "Record added"
-    _debug "Response: $response"
-    return 0
+  if [ -n "$response" ]; then
+    if [ ! "$(echo "$response" | _contains '"result":"success"')" ]; then
+      _info "Record added"
+      _debug "Response: $response"
+      return 0
+    fi
   fi
   _err "could not create record"
   _debug "Response: $response"
