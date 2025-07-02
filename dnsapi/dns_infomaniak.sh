@@ -83,7 +83,7 @@ dns_infomaniak_add() {
 
   # API call
   response=$(_post "$data" "${INFOMANIAK_API_URL}/2/zones/${zone}/records")
-  if [ -n "$response" ] && [ echo "$response" | _contains '"result":"success"' ]; then
+  if [ -n "$response" ] && [ "$(echo "$response" | _contains '"result":"success"')" ]; then
     _info "Record added"
     _debug "Response: $response"
     return 0
@@ -149,10 +149,8 @@ dns_infomaniak_rm() {
 
   # find previous record
   # shellcheck disable=SC2086
-  response=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" |\
-    sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g')
-  record_id=$(echo $response |\
-    sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'$key'".*"target":"\\"'$txtvalue'\\"".*/\1/p')
+  response=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" | sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g')
+  record_id=$(echo "$response" | sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'"$key"'".*"target":"\\"'"$txtvalue"'\\"".*/\1/p')
 
   if [ -z "$record_id" ]; then
     _debug "Response: $response"
