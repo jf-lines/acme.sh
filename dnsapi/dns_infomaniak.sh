@@ -146,7 +146,8 @@ dns_infomaniak_rm() {
   fi
 
   # extract first part of domain
-  key=$(echo ${fulldomain%."$zone"} | _lower_case)
+  key=${fulldomain%."$zone"}
+  key=$(echo "$key" | _lower_case)
 
   _debug "zone:$zone"
   _debug "key:$key"
