@@ -154,6 +154,8 @@ dns_infomaniak_rm() {
   response=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" | sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g')
   record_id=$(echo "$response" | sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'"$key"'".*"target":"\\"'"$txtvalue"'\\"".*/\1/p')
   _debug "response: $response"
+  _debug "key: $key"
+  _debug "txtvalue: $txtvalue"
   _debug "record_id: $record_id"
 
   if [ -z "$record_id" ]; then
