@@ -76,7 +76,8 @@ dns_infomaniak_add() {
   # extract first part of domain
   key=${fulldomain%."$zone"}
 
-  _debug "zone:$zone key:$key"
+  _debug "key:$key"
+  _debug "txtvalue: $txtvalue"
 
   # payload
   data="{\"type\": \"TXT\", \"source\": \"$key\", \"target\": \"$txtvalue\", \"ttl\": $INFOMANIAK_TTL}"
@@ -146,6 +147,8 @@ dns_infomaniak_rm() {
 
   # extract first part of domain
   key=${fulldomain%."$zone"}
+  # key to lowercase because the API records and responds in lowercase
+  key=$(echo "$key" | sed 's/.*/\L&/g')
 
   _debug "zone:$zone key:$key"
 
