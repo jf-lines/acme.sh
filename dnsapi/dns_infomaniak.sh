@@ -146,11 +146,10 @@ dns_infomaniak_rm() {
   fi
 
   # extract first part of domain
-  key=${fulldomain%."$zone"}
-  # key to lowercase because the API records and responds in lowercase
-  key=$(echo "$key" | sed 's/.*/\L&/g')
+  key=$(echo ${fulldomain%."$zone"} | _lower_case)
 
-  _debug "zone:$zone key:$key"
+  _debug "zone:$zone"
+  _debug "key:$key"
 
   # find previous record
   # shellcheck disable=SC2086
