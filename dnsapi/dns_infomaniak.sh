@@ -153,9 +153,10 @@ dns_infomaniak_rm() {
   # shellcheck disable=SC2086
   response=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" | sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g')
   record_id=$(echo "$response" | sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'"$key"'".*"target":"\\"'"$txtvalue"'\\"".*/\1/p')
+  _debug "response: $response"
+  _debug "record_id: $record_id"
 
   if [ -z "$record_id" ]; then
-    _debug "Response: $response"
     _err "could not find record to delete"
     return 1
   fi
