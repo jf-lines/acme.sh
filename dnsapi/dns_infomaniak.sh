@@ -5,7 +5,7 @@ Site: Infomaniak.com
 Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_infomaniak
 Options:
  INFOMANIAK_API_TOKEN API Token
-Issues: v1 version, github.com/acmesh-official/acme.sh/issues/3188
+Issues: github.com/acmesh-official/acme.sh/issues/3188
 
 '
 
@@ -87,11 +87,11 @@ dns_infomaniak_add() {
   if [ -n "$response" ]; then
     if [ ! "$(echo "$response" | _contains '"result":"success"')" ]; then
       _info "Record added"
-      _debug "Response: $response"
+      _debug "response: $response"
       return 0
     fi
   fi
-  _err "could not create record"
+  _err "Could not create record."
   _debug "Response: $response"
   return 1
 }
@@ -106,7 +106,7 @@ dns_infomaniak_rm() {
 
   if [ -z "$INFOMANIAK_API_TOKEN" ]; then
     INFOMANIAK_API_TOKEN=""
-    _err "Please provide a valid Infomaniak API token in variable INFOMANIAK_API_TOKEN"
+    _err "Please provide a valid Infomaniak API token in variable INFOMANIAK_API_TOKEN."
     return 1
   fi
 
@@ -156,13 +156,13 @@ dns_infomaniak_rm() {
   # shellcheck disable=SC2086
   response=$(_get "${INFOMANIAK_API_URL}/2/zones/${zone}/records" | sed 's/.*"data":\[\(.*\)\]}/\1/; s/},{/}{/g')
   record_id=$(echo "$response" | sed -n 's/.*"id":"*\([0-9]*\)"*.*"source":"'"$key"'".*"target":"\\"'"$txtvalue"'\\"".*/\1/p')
-  _debug "response: $response"
   _debug "key: $key"
   _debug "txtvalue: $txtvalue"
   _debug "record_id: $record_id"
 
   if [ -z "$record_id" ]; then
     _err "could not find record to delete"
+    _debug "response: $response"
     return 1
   fi
 
@@ -173,6 +173,7 @@ dns_infomaniak_rm() {
     return 0
   else
     _err "could not delete record"
+    _debug "response: $response"
     return 1
   fi
 }
