@@ -18,7 +18,6 @@ OPUSDNS_TTL_Default=60
 ######## Public functions ###########
 
 # Add DNS TXT record
-# Usage: dns_opusdns_add _acme-challenge.example.com "token_value"
 dns_opusdns_add() {
   fulldomain=$1
   txtvalue=$2
@@ -27,44 +26,17 @@ dns_opusdns_add() {
   _debug fulldomain "$fulldomain"
   _debug txtvalue "$txtvalue"
 
-  # Load and validate credentials
-  OPUSDNS_API_Key="${OPUSDNS_API_Key:-$(_readaccountconf_mutable OPUSDNS_API_Key)}"
-  if [ -z "$OPUSDNS_API_Key" ]; then
-    _err "OPUSDNS_API_Key not set. Please set it and try again."
-    _err "You can create an API key at your OpusDNS dashboard."
+  if ! _opusdns_init; then
     return 1
   fi
 
-  # Save credentials for future use
-  _saveaccountconf_mutable OPUSDNS_API_Key "$OPUSDNS_API_Key"
-
-  # Load optional configuration
-  OPUSDNS_API_Endpoint="${OPUSDNS_API_Endpoint:-$(_readaccountconf_mutable OPUSDNS_API_Endpoint)}"
-  if [ -z "$OPUSDNS_API_Endpoint" ]; then
-    OPUSDNS_API_Endpoint="$OPUSDNS_API_Endpoint_Default"
-  fi
-  _saveaccountconf_mutable OPUSDNS_API_Endpoint "$OPUSDNS_API_Endpoint"
-
-  OPUSDNS_TTL="${OPUSDNS_TTL:-$(_readaccountconf_mutable OPUSDNS_TTL)}"
-  if [ -z "$OPUSDNS_TTL" ]; then
-    OPUSDNS_TTL="$OPUSDNS_TTL_Default"
-  fi
-  _saveaccountconf_mutable OPUSDNS_TTL "$OPUSDNS_TTL"
-
-  _debug "API Endpoint: $OPUSDNS_API_Endpoint"
-  _debug "TTL: $OPUSDNS_TTL"
-
-  # Detect zone from FQDN
   if ! _get_zone "$fulldomain"; then
-    _err "Failed to detect zone for domain: $fulldomain"
     return 1
   fi
 
-  _info "Detected zone: $_zone"
-  _debug "Record name: $_record_name"
+  _info "Zone: $_zone, Record: $_record_name"
 
-  # Add the TXT record
-  if ! _opusdns_add_record "$_zone" "$_record_name" "$txtvalue"; then
+  if ! _opusdns_api PATCH "/v1/dns/$_zone/records" "{\"ops\":[{\"op\":\"upsert\",\"record\":{\"name\":\"$_record_name\",\"type\":\"TXT\",\"ttl\":$OPUSDNS_TTL,\"rdata\":\"\\\"$txtvalue\\\"\"}}]}"; then
     _err "Failed to add TXT record"
     return 1
   fi
@@ -74,7 +46,6 @@ dns_opusdns_add() {
 }
 
 # Remove DNS TXT record
-# Usage: dns_opusdns_rm _acme-challenge.example.com "token_value"
 dns_opusdns_rm() {
   fulldomain=$1
   txtvalue=$2
@@ -83,38 +54,19 @@ dns_opusdns_rm() {
   _debug fulldomain "$fulldomain"
   _debug txtvalue "$txtvalue"
 
-  # Load credentials
-  OPUSDNS_API_Key="${OPUSDNS_API_Key:-$(_readaccountconf_mutable OPUSDNS_API_Key)}"
-  OPUSDNS_API_Endpoint="${OPUSDNS_API_Endpoint:-$(_readaccountconf_mutable OPUSDNS_API_Endpoint)}"
-  OPUSDNS_TTL="${OPUSDNS_TTL:-$(_readaccountconf_mutable OPUSDNS_TTL)}"
-
-  if [ -z "$OPUSDNS_API_Endpoint" ]; then
-    OPUSDNS_API_Endpoint="$OPUSDNS_API_Endpoint_Default"
-  fi
-
-  if [ -z "$OPUSDNS_TTL" ]; then
-    OPUSDNS_TTL="$OPUSDNS_TTL_Default"
-  fi
-
-  if [ -z "$OPUSDNS_API_Key" ]; then
-    _err "OPUSDNS_API_Key not found"
+  if ! _opusdns_init; then
     return 1
   fi
 
-  # Detect zone from FQDN
   if ! _get_zone "$fulldomain"; then
-    _err "Failed to detect zone for domain: $fulldomain"
-    # Don't fail cleanup - best effort
+    _err "Zone not found, cleanup skipped"
     return 0
   fi
 
-  _info "Detected zone: $_zone"
-  _debug "Record name: $_record_name"
+  _info "Zone: $_zone, Record: $_record_name"
 
-  # Remove the TXT record (need to pass txtvalue)
-  if ! _opusdns_remove_record "$_zone" "$_record_name" "$txtvalue"; then
-    _err "Warning: Failed to remove TXT record (this is usually not critical)"
-    # Don't fail cleanup - best effort
+  if ! _opusdns_api PATCH "/v1/dns/$_zone/records" "{\"ops\":[{\"op\":\"remove\",\"record\":{\"name\":\"$_record_name\",\"type\":\"TXT\",\"ttl\":$OPUSDNS_TTL,\"rdata\":\"\\\"$txtvalue\\\"\"}}]}"; then
+    _err "Warning: Failed to remove TXT record"
     return 0
   fi
 
@@ -124,132 +76,83 @@ dns_opusdns_rm() {
 
 ######## Private functions ###########
 
-# Detect zone from FQDN by checking against OpusDNS API
-# Iterates through domain parts until a valid zone is found
-# Sets global variables: _zone, _record_name
-_get_zone() {
-  domain=$1
-  _debug "Detecting zone for: $domain"
+# Initialize and validate configuration
+_opusdns_init() {
+  OPUSDNS_API_Key="${OPUSDNS_API_Key:-$(_readaccountconf_mutable OPUSDNS_API_Key)}"
+  OPUSDNS_API_Endpoint="${OPUSDNS_API_Endpoint:-$(_readaccountconf_mutable OPUSDNS_API_Endpoint)}"
+  OPUSDNS_TTL="${OPUSDNS_TTL:-$(_readaccountconf_mutable OPUSDNS_TTL)}"
 
-  # Remove trailing dot if present
-  domain=$(echo "$domain" | sed 's/\.$//')
+  if [ -z "$OPUSDNS_API_Key" ]; then
+    _err "OPUSDNS_API_Key not set"
+    return 1
+  fi
+
+  [ -z "$OPUSDNS_API_Endpoint" ] && OPUSDNS_API_Endpoint="$OPUSDNS_API_Endpoint_Default"
+  [ -z "$OPUSDNS_TTL" ] && OPUSDNS_TTL="$OPUSDNS_TTL_Default"
+
+  _saveaccountconf_mutable OPUSDNS_API_Key "$OPUSDNS_API_Key"
+  _saveaccountconf_mutable OPUSDNS_API_Endpoint "$OPUSDNS_API_Endpoint"
+  _saveaccountconf_mutable OPUSDNS_TTL "$OPUSDNS_TTL"
+
+  _debug "Endpoint: $OPUSDNS_API_Endpoint"
+  return 0
+}
+
+# Make API request
+# Usage: _opusdns_api METHOD PATH [DATA]
+_opusdns_api() {
+  method=$1
+  path=$2
+  data=$3
 
   export _H1="X-Api-Key: $OPUSDNS_API_Key"
+  export _H2="Content-Type: application/json"
 
-  # Start from position 2 (skip first part like _acme-challenge)
+  url="$OPUSDNS_API_Endpoint$path"
+  _debug2 "API: $method $url"
+  [ -n "$data" ] && _debug2 "Data: $data"
+
+  if [ -n "$data" ]; then
+    response=$(_post "$data" "$url" "" "$method")
+  else
+    response=$(_get "$url")
+  fi
+
+  if [ $? -ne 0 ]; then
+    _err "API request failed"
+    _debug "Response: $response"
+    return 1
+  fi
+
+  _debug2 "Response: $response"
+  return 0
+}
+
+# Detect zone from FQDN
+# Sets: _zone, _record_name
+_get_zone() {
+  domain=$(echo "$1" | sed 's/\.$//')
+  _debug "Finding zone for: $domain"
+
   i=2
   p=1
   while true; do
-    # Extract potential zone (domain parts from position i onwards)
     h=$(printf "%s" "$domain" | cut -d . -f "$i"-100)
-    _debug "Trying zone: $h"
 
     if [ -z "$h" ]; then
-      # No more parts to try
-      _err "Could not find a valid zone for: $domain"
+      _err "No valid zone found for: $domain"
       return 1
     fi
 
-    # Check if this zone exists in OpusDNS
-    response=$(_get "$OPUSDNS_API_Endpoint/v1/dns/$h")
-
-    if _contains "$response" '"name"'; then
-      # Zone found
-      _record_name=$(printf "%s" "$domain" | cut -d . -f 1-"$p")
+    _debug "Trying: $h"
+    if _opusdns_api GET "/v1/dns/$h" && _contains "$response" '"name"'; then
       _zone="$h"
-      _debug "Found zone: $_zone"
-      _debug "Record name: $_record_name"
+      _record_name=$(printf "%s" "$domain" | cut -d . -f 1-"$p")
+      [ -z "$_record_name" ] && _record_name="@"
       return 0
     fi
 
-    _debug "$h not found, trying next"
     p="$i"
     i=$(_math "$i" + 1)
   done
-
-  return 1
-}
-
-  if [ -z "$_record_name" ]; then
-    _record_name="@"
-  fi
-
-  return 0
-}
-
-# Add TXT record using OpusDNS API
-_opusdns_add_record() {
-  zone=$1
-  record_name=$2
-  txtvalue=$3
-
-  _debug "Adding TXT record: $record_name.$zone = $txtvalue"
-
-  # Escape all JSON special characters in txtvalue
-  # Order matters: escape backslashes first, then other characters
-  escaped_value=$(printf '%s' "$txtvalue" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-
-  # Build JSON payload
-  # Note: TXT records need quotes around the value in rdata
-  json_payload="{\"ops\":[{\"op\":\"upsert\",\"record\":{\"name\":\"$record_name\",\"type\":\"TXT\",\"ttl\":$OPUSDNS_TTL,\"rdata\":\"\\\"$escaped_value\\\"\"}}]}"
-
-  _debug2 "JSON payload: $json_payload"
-
-  # Send PATCH request
-  export _H1="X-Api-Key: $OPUSDNS_API_Key"
-  export _H2="Content-Type: application/json"
-
-  response=$(_post "$json_payload" "$OPUSDNS_API_Endpoint/v1/dns/$zone/records" "" "PATCH")
-  status=$?
-
-  _debug2 "API Response: $response"
-
-  if [ $status -ne 0 ]; then
-    _err "Failed to add TXT record"
-    _err "API Response: $response"
-    return 1
-  fi
-
-  # Check for error in response (OpusDNS returns JSON error even on failure)
-  # Use anchored pattern to avoid matching field names like "error_count"
-  if echo "$response" | grep -q '"error":'; then
-    _err "API returned error: $response"
-    return 1
-  fi
-
-  return 0
-}
-
-# Remove TXT record using OpusDNS API
-_opusdns_remove_record() {
-  zone=$1
-  record_name=$2
-  txtvalue=$3
-
-  _debug "Removing TXT record: $record_name.$zone = $txtvalue"
-
-  # Escape all JSON special characters in txtvalue (same as add)
-  escaped_value=$(printf '%s' "$txtvalue" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-
-  # Build JSON payload for removal - needs complete record specification
-  json_payload="{\"ops\":[{\"op\":\"remove\",\"record\":{\"name\":\"$record_name\",\"type\":\"TXT\",\"ttl\":$OPUSDNS_TTL,\"rdata\":\"\\\"$escaped_value\\\"\"}}]}"
-
-  _debug2 "JSON payload: $json_payload"
-
-  # Send PATCH request
-  export _H1="X-Api-Key: $OPUSDNS_API_Key"
-  export _H2="Content-Type: application/json"
-
-  response=$(_post "$json_payload" "$OPUSDNS_API_Endpoint/v1/dns/$zone/records" "" "PATCH")
-  status=$?
-
-  _debug2 "API Response: $response"
-
-  if [ $status -ne 0 ]; then
-    _err "Failed to remove TXT record"
-    _err "API Response: $response"
-    return 1
-  fi
-
-  return 0
 }
