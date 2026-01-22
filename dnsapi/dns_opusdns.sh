@@ -151,17 +151,26 @@ _get_zone() {
 
     _debug2 "Zones response (page $page): $response"
 
-    # Extract zone names from this page (try jq first, fallback to grep/sed)
+    # Extract zone names from this page
+    # The API returns: {"results":[{"name":"zone.com.",...},...],"pagination":{"has_next_page":true,...}}
     if _exists jq; then
       page_zones=$(echo "$response" | jq -r '.results[].name' 2>/dev/null | sed 's/\.$//')
-      has_next=$(echo "$response" | jq -r '.has_next_page // false' 2>/dev/null)
+      has_next=$(echo "$response" | jq -r '.pagination.has_next_page // false' 2>/dev/null)
     else
       # Fallback: extract zone names using grep/sed
-      # Note: This simple parser does not handle escaped quotes in zone names.
-      # Zone names with escaped quotes are extremely rare and would require jq.
-      page_zones=$(echo "$response" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"\\]*"' | sed 's/"name"[[:space:]]*:[[:space:]]*"\([^"\\]*\)"/\1/' | sed 's/\.$//')
-      has_next=$(echo "$response" | grep -oE '"has_next_page"[[:space:]]*:[[:space:]]*(true|false)' | grep -o 'true\|false')
+      # Extract only top-level zone names from results array (before rrsets)
+      # Pattern: "results":[{"...","name":"zonename.com.","domain_parts":
+      page_zones=$(echo "$response" | sed 's/,"rrsets":\[[^]]*\]//g' | grep -o '"results":\[.*\]' | grep -o '"name":"[^"]*"' | sed 's/"name":"//g;s/"//g;s/\.$//')
+      # Extract has_next_page from pagination object
+      if echo "$response" | grep -q '"has_next_page":true'; then
+        has_next="true"
+      else
+        has_next="false"
+      fi
     fi
+
+    _debug2 "Page $page zones: $page_zones"
+    _debug2 "Has next page: $has_next"
 
     # Append zones from this page
     if [ -n "$page_zones" ]; then
