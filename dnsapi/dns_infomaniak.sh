@@ -9,12 +9,13 @@ Issues: github.com/acmesh-official/acme.sh/issues/3188
 
 '
 
-# To use this API you need visit the API dashboard of your account
-# once logged into https://manager.infomaniak.com add /api/dashboard to the URL
-#
+# To use this API you need visit the API dashboard of your account.
 # Note: the URL looks like this:
-# https://manager.infomaniak.com/v3/<account_id>/api/dashboard
-# Then generate a token with the scope Domain
+# https://manager.infomaniak.com/v3/<account_id>/ng/profile/user/token/list
+# Then generate a token with following scopes :
+#  - domain:read
+#  - dns:read
+#  - dns:write
 # this is given as an environment variable INFOMANIAK_API_TOKEN
 
 # base variables
